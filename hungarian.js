@@ -13,80 +13,83 @@ function hungarian(matrix) {
     start: undefined,
     path: undefined,
   }
-  // step 1
-  const matrixZeroed = zero(matrix)
-  // step 2
-  const starred = starZeroes({ matrix: matrixZeroed, state })
-  // step 3
-  const covered = coverStarredColumns(starred)
-  console.table(covered.matrix)
-  console.table(covered.state.path)
-  console.table(covered.state)
+  
+  zero(matrix)
+  let step = starZeroes(matrix, state)
+  while (typeof step === 'function') {
+    step = step(matrix, state)
+  }
+  // console.table(matrix)
+  // console.table(state.path)
 
-  return getResult(covered)
+  const result = getResult(matrix, state)
+  console.table(result)
+  return result
 
 }
 
 
 // step 1
 function zero(matrix) {
-  return columnsZeroed(rowsZeroed(matrix))
+  columnsZeroed(matrix)
+  rowsZeroed(matrix)
 }
 
 // step 2
-function starZeroes({ matrix, state }) {
+function starZeroes(matrix, state) {
   let x, y
   while (true) {
-    [x, y] = findUncoverdZero({ matrix, state })
+    [x, y] = findUncoverdZero(matrix, state)
     if (x === -1) break
-    starZero({ matrix, state, position: [x, y] })
+    starZero(state, [x, y])
   }
-  return { matrix, state: clearCovers(state) }
+  clearCovers(state)
+  return coverStarredColumns
 }
 
 // step 3
-function coverStarredColumns({ matrix, state }) {
+function coverStarredColumns(matrix, state) {
   matrix.forEach((row, x) => {
-    return row.forEach((_, y) => {
+    row.forEach((_, y) => {
       if (state.starred[x][y] === 1) {
-        coverColumn({ matrix, state, column: y })
+        coverColumn(state, y)
       }
     })
   })
   if (state.columns_covered.every(covered => covered)) {
-    return { matrix, state }
+    return // done!
   }
-  return primeZeroes({ matrix, state })
+  return primeZeroes
 }
 
 // step 4
-function primeZeroes({ matrix, state }) {
+function primeZeroes(matrix, state) {
   let x, y = -1
   while (true) {
-    [x, y] = findUncoverdZero({ matrix, state })
+    [x, y] = findUncoverdZero(matrix, state)
     if (x === -1) {
-      return augment({ matrix, state })
+      return augment
     }
     state.starred[x][y] = 2
-    const starredColumn = findStarInColumn({ matrix, state, column: x })
+    const starredColumn = findStarInColumn(matrix, state, x)
     if (starredColumn > -1) {
-      coverRow({ matrix, state, row: x })
-      coverColumn({ matrix, state, column: starredColumn })
-      starZero({ matrix, state, position: [x, starredColumn] })
+      coverRow(state, x)
+      coverColumn(state, starredColumn)
+      starZero(state, [x, starredColumn])
     } else {
       state.start = [x, y]
-      return createPath({ matrix, state })
+      return createPath
     }
   }
 }
 
 // step 5
-function createPath({ matrix, state }) {
+function createPath(matrix, state) {
   let step = 0
   const path = [state.start]
   let done = false
   while (!done) {
-    const x = findStarInColumn({ matrix, state, column: path[step][1] })
+    const x = findStarInColumn(matrix, state, path[step][1])
     if (x === -1) {
       done = true
     } else {
@@ -95,64 +98,66 @@ function createPath({ matrix, state }) {
     }
     if (!done) {
       step++
-      const y = findPrimeInRow({ matrix, state, row: path[step][0] })
+      const y = findPrimeInRow(matrix, state, path[step][0])
       path.push([path[step-1][0], y])
     }
   }
-  return convertPath({ matrix, state: { ...clearCovers(clearPrimes(state)), path } })
+  clearCovers(state)
+  clearPrimes(state)
+  convertPath(matrix, state)
+  return coverStarredColumns
 }
 
 // step 6
-function augment({ matrix, state }) {
-  const min = findSmallestUncovered({ matrix, state })
-  return primeZeroes({
-    state,
-    matrix: matrix.map((row, x) =>
-      row.map((_, y) => {
-        if (isCoveredRow({ state, row: x })) {
-          matrix[x][y] += min
-        }
-        if (!isCoveredColumn({ state, column: y })) {
-          matrix[x][y] -= min
-        }
-      })
-    ),
-  })
+function augment(matrix, state) {
+  const min = findSmallestUncovered(matrix, state)
+  if (min === Infinity) {
+    return // done!
+  }
+
+  matrix.forEach((row, x) =>
+    row.forEach((_, y) => {
+      if (isCoveredRow(state, x)) {
+        matrix[x][y] += min
+      }
+      if (!isCoveredColumn(state, y)) {
+        matrix[x][y] -= min
+      }
+    })
+  )
+  return primeZeroes
 }
 
-function getResult({ matrix, state }) {
-  return getStarredZeroes({ matrix, state })
+function getResult(matrix, state) {
+  return getStarredZeroes(matrix, state)
     .map(([x, y]) => [x + 1, y + 1])
 }
 
 
-function starZero({ matrix, state, position }) {
+function starZero(state, position) {
   const [x, y] = position
   state.starred[x][y] = 1
-  coverRow({ matrix, state, row: x })
-  coverColumn({ matrix, state, column: y })
-  return { matrix, state }
+  coverRow(state, x)
+  coverColumn(state, y)
 }
   
-function coverRow({ matrix, state, row }) {
+function coverRow(state, row) {
   state.rows_covered[row] = true
-  return { matrix, state }
 }
 
-function isCoveredRow({ state, row }) {
+function isCoveredRow(state, row) {
   return state.rows_covered[row]
 }
 
-function coverColumn({ matrix, state, column }) {
+function coverColumn(state, column) {
   state.columns_covered[column] = true
-  return { matrix, state }
 }
 
-function isCoveredColumn({ state, column }) {
+function isCoveredColumn(state, column) {
   return state.columns_covered[column]
 }
 
-function getStarredZeroes({ matrix, state }) {
+function getStarredZeroes(matrix, state) {
   return matrix.reduce((acc, row, i) => {
     return row.reduce((acc, _, j) => {
       if (state.starred[i][j] === 1) {
@@ -164,23 +169,22 @@ function getStarredZeroes({ matrix, state }) {
 }
 
 function rowsZeroed(matrix) {
-  return matrix.map(row => {
+  matrix.forEach((row, x) => {
     const min = Math.min(...row)
-    return row.map(num => num - min)
+    row.forEach((_, y) => matrix[x][y] -= min)
   })
 }
 
 function columnsZeroed(matrix) {
   const minColValues = matrix.map((_, column) => Math.min(...matrix.map(row => row[column])))
-  return matrix.map((row, i) => row.map((num, j) => num - minColValues[j]))
+  matrix.forEach((row, x) =>
+    row.map((_, y) => matrix[x][y] - minColValues[x])
+  )
 }
 
 function clearCovers(state) {
-  return {
-    ...state,
-    rows_covered: state.rows_covered.map(_ => false),
-    columns_covered: state.columns_covered.map(_ => false),
-  }
+  state.rows_covered = state.rows_covered.map(_ => false)
+  state.columns_covered = state.columns_covered.map(_ => false)
 }
 
 function clearPrimes(state) {
@@ -197,14 +201,14 @@ function findPrimeInRow({ matrix, state, row }) {
   }, -1)
 }
 
-function findStarInRow({ matrix, state, row }) {
-  return matrix[row].reduce((acc, num, j) => {
+function findStarInRow(matrix, state, row) {
+  return matrix[row].reduce((acc, _, j) => {
     if(state.starred[row][j] === 1) return j
     return acc
   }, -1)
 }
   
-function findStarInColumn({ matrix, state, column }) {
+function findStarInColumn(matrix, state, column) {
   return matrix.reduce((acc, _, i) => {
     if(state.starred[i][column] === 1) return i
     return acc
@@ -212,10 +216,10 @@ function findStarInColumn({ matrix, state, column }) {
 }
 
 
-function findUncoverdZero({matrix, state}) {
+function findUncoverdZero(matrix, state) {
   return matrix.reduce((acc, row, x) => {
     return row.reduce((acc, num, y) => {
-      if (num === 0 && !isCoveredRow({ state, row: x }) && !isCoveredColumn({ state, column: y })) {
+      if (num === 0 && !isCoveredRow(state, x) && !isCoveredColumn(state, y)) {
         return [x, y]
       }
       return acc
@@ -231,7 +235,7 @@ function columnsWithZero(matrix) {
   return matrix[0].map((_, i) => matrix.every(row => row[i] !== 0))
 }
 
-function convertPath({ matrix, state }) {
+function convertPath(matrix, state) {
   return {
     state,
     matrix: matrix.map((row, i) =>
@@ -242,14 +246,14 @@ function convertPath({ matrix, state }) {
   }
 }
 
-function findSmallestUncovered({ matrix, state }) {
+function findSmallestUncovered(matrix, state) {
   return matrix.reduce((acc, row, x) =>
     row.reduce((acc, num, y) =>
-      !isCoveredRow({ state, row: x }) && !isCoveredColumn({ state, column: y }) && num < acc ? num : acc
+      !isCoveredRow(state, x) && !isCoveredColumn(state, y) && num < acc ? num : acc
       , acc)
     , Infinity)
 }
 
 // keep this function call here 
-// console.log(OptimalAssignments(["(1,2,1)","(4,1,5)","(5,2,1)"]));
+console.log(OptimalAssignments(["(1,2,1)","(4,1,5)","(5,2,1)"]));
 console.log(OptimalAssignments(["(13,4,7,6)","(1,11,5,4)","(6,7,2,8)","(1,3,5,9)"]));
